@@ -1,0 +1,132 @@
+---
+title: "Project Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(jsonlite)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(gapminder)
+```
+
+<style>
+  .nav-pills>li>a:hover, .nav-pills>li>a:focus, .nav-pills>li.active>a,     .nav-pills>li.active>a:hover, .nav-pills>li.active>a:focus{
+     background-color: steelblue;
+     }
+</style>
+
+Column {data-width=650, .tabset .tabset-fade .tabset-pills}
+-----------------------------------------------------------------------
+
+
+### Plot A
+
+```{r plot1}
+mydata <- mtcars
+chartA <- ggplot(mydata, aes(x= wt, y = qsec)) + geom_point()
+ggplotly(chartA)
+```
+
+### Plot A2
+
+```{r plot2}
+chartB <- ggplot(mtcars, aes(x=as.factor(cyl), fill=as.factor(cyl) )) + 
+  geom_bar( ) +
+  scale_fill_brewer(palette = "Set1") +
+  theme(legend.position="none")
+ggplotly(chartB)
+```
+
+### Plot A3
+
+```{r plot3}
+
+data <- gapminder %>% filter(year=="2007") %>% dplyr::select(-year)
+
+# Most basic bubble plot
+data %>%
+  arrange(desc(pop)) %>%
+  mutate(country = factor(country, country)) %>%
+  ggplot(aes(x=gdpPercap, y=lifeExp, color=continent)) +
+    geom_point(alpha=0.5) +
+    scale_size(range = c(.1, 24), name="Population (M)")
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Samples
+
+```{r samples}
+renderValueBox({
+    samples <- read.csv("/home/ngsa4/Documents/SampleSheet.csv")
+    sample_no <- nrow(samples)
+    valueBox(value = sample_no, icon = "fa-file")
+})
+
+```
+
+### Steps In Workflow
+
+```{r steps_workflow}
+process <- read.csv("/home/ngsa4/Documents/pipeline_trace.txt", sep = "\t")
+process_no <- nrow(process)[1]
+```
+
+```{r worflow_no}
+renderValueBox({
+  valueBox(value = process_no, icon = "fa-arrows-spin")
+})
+```
+
+### Platforms Available
+
+```{r platform}
+json_data <- fromJSON("/home/ngsa4/Documents/templates/nextflow/local/rnaseq-analysis/input-options.json")
+platforms <- json_data$Required$value[[1]]
+platform_no <- length(platforms)
+```
+
+```{r platform_no}
+renderValueBox({
+  valueBox(value = platform_no, icon = "fa-layer-group")
+})
+```
+
+### Progress Report
+
+```{r progresschart}
+
+process <- read.csv("/home/ngsa4/Documents/pipeline_trace.txt", sep = "\t")
+
+total_n <- length(process$status)
+cached <- length(which(process$status == "CACHED"))
+completed <- length(which(process$status == "COMPLETED"))
+running <- length(which(process$status == "RUNNING"))
+
+start <- 0
+percentage_cached <- cached/total_n * 100
+percentage_completed <- completed/total_n * 100
+percentage_running <-  running/total_n * 100
+
+added_cached_completed <- percentage_cached + percentage_completed
+
+progress <- process %>% mutate(rate = case_when(endsWith(status, "HED") ~ added_cached_completed, endsWith(status, "TED") ~ added_cached_completed, endsWith(status, "ING") ~ percentage_running))
+
+```
+
+```{r gaugeplot}
+value = progress$rate
+gauge(value = value, min = 0, max = 100,
+      gaugeSectors(success = c(90,100),
+                   warning = c(50, 90),
+                   danger = c(0, 40)))
+```
+
